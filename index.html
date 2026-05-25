@@ -120,7 +120,7 @@
                     <div>
                         <h2 class="text-lg font-bold text-white flex items-center gap-2">
                             <span>歡迎回來，專注者</span>
-                            <span id="account-type-badge" class="text-[10px] bg-brand-500/20 text-brand-400 px-2 py-0.5 rounded-full border border-brand-500/30">雲端同步中</span>
+                            <span id="account-type-badge" class="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/30">雲端同步中</span>
                         </h2>
                         <p id="user-email-display" class="text-xs text-slate-400 font-mono mt-0.5"></p>
                     </div>
@@ -200,7 +200,7 @@
                     <!-- Spotify 播放器 -->
                     <div class="mb-6 rounded-2xl overflow-hidden border border-white/5 bg-slate-900/40 p-1">
                         <span class="text-[11px] text-slate-500 block px-2 py-1 font-bold">SPOTIFY LO-FI BEATS</span>
-                        <iframe style="border-radius:12px" src="https://open.spotify.com/embed/playlist/37i9dQZF1DWWQRwui0ExPn?utm_source=generator&theme=0" width="100%" height="152" frameBorder="0" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>
+                        <iframe style="border-radius:12px" src="https://open.spotify.com/embed/playlist/37i9dQZF1DWWQRwui0ExPn?utm_source=generator&theme=0" width="100%" height="152" frameborder="0" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>
                     </div>
 
                     <!-- YouTube 播放器 -->
@@ -236,39 +236,23 @@
             appId: ""
         };
 
-        // 安全地偵測與讀取系統環境注入的全域變數
-        let configToUse = null;
-        let isFirebaseAvailable = false;
-        let auth = null;
-        let db = null;
-        let googleProvider = null;
+        // 嚴格地偵測與讀取系統環境注入的全域變數
+        let configToUse = firebaseConfig;
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'study-planner-app';
 
-        try {
-            if (typeof __firebase_config !== 'undefined' && __firebase_config) {
-                const envConfig = JSON.parse(__firebase_config);
-                // 檢查是否具有合法的 API 密鑰，防止 invalid-api-key 崩潰
-                if (envConfig && envConfig.apiKey && envConfig.apiKey.trim() !== "") {
-                    configToUse = envConfig;
-                }
+        if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+            try {
+                configToUse = JSON.parse(__firebase_config);
+            } catch (e) {
+                console.error("無法解析環境變數 __firebase_config", e);
             }
-        } catch (e) {
-            console.warn("環境解析 Firebase 配置出錯：", e);
         }
 
-        // 當系統無動態憑證注入時，使用本機儲存（LocalStorage）作為優雅的降級容錯保護，不讓程式碼出錯中斷
-        if (configToUse) {
-            try {
-                const app = initializeApp(configToUse);
-                auth = getAuth(app);
-                db = getFirestore(app);
-                googleProvider = new GoogleAuthProvider();
-                isFirebaseAvailable = true;
-            } catch (err) {
-                console.error("Firebase 初始化出錯，進入本機儲存降級模式：", err);
-                isFirebaseAvailable = false;
-            }
-        }
+        // 初始化 Firebase 全域環境
+        const app = initializeApp(configToUse);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const googleProvider = new GoogleAuthProvider();
 
         // === 系統全域變數 ===
         let currentUser = null;
@@ -296,49 +280,17 @@
 
         // === 1. 身分驗證安全機制 (RULE 3 - 先驗證，後讀寫) ===
         const initAuth = async () => {
-            if (!isFirebaseAvailable) {
-                // Firebase 無法使用時，模擬自動登入，使 Canvas 預覽能立即流暢運行
-                setupLocalFallbackUser();
-                return;
-            }
             try {
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    // 若無自訂憑證則不預先動作，讓使用者手動點選「訪客」或「登入」
                 }
             } catch (err) {
-                console.warn("Auth initialization failed, fallback to manual selection:", err);
+                console.warn("憑證初始化失敗，等待使用者手動操作：", err);
             }
         };
 
-        // 模擬無 Firebase 時的單機降級沙盒
-        function setupLocalFallbackUser() {
-            currentUser = { uid: "local-user-fallback", email: "guest@offline-sandbox.io", isAnonymous: true };
-            authModal.classList.add('opacity-0', 'pointer-events-none');
-            setTimeout(() => authModal.style.display = 'none', 300);
-            appWrapper.style.display = 'flex';
-            userEmailDisplay.textContent = "本地離線沙盒 (數據暫存於本機)";
-            accountTypeBadge.textContent = "離線模式";
-            accountTypeBadge.className = "text-[10px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/30";
-            
-            // 讀取 LocalStorage 進度
-            try {
-                todos = JSON.parse(localStorage.getItem('local_todos')) || [];
-                dailyHistory = JSON.parse(localStorage.getItem('local_daily_history')) || {};
-                userAvatarBase64 = localStorage.getItem('local_avatar') || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80";
-                userAvatar.src = userAvatarBase64;
-            } catch (e) {
-                console.error("讀取本地儲存失敗", e);
-            }
-            renderTodos();
-            updateOverview();
-            updateChart();
-        }
-
-        // 綁定註冊/登入按鈕事件 (僅在 Firebase 啟用時生效)
+        // 綁定註冊/登入按鈕事件
         document.getElementById('login-btn').addEventListener('click', async () => {
-            if (!isFirebaseAvailable) { setupLocalFallbackUser(); return; }
             const email = document.getElementById('auth-email').value.trim();
             const password = document.getElementById('auth-password').value;
             if(!email || !password) return;
@@ -350,7 +302,6 @@
         });
 
         document.getElementById('register-btn').addEventListener('click', async () => {
-            if (!isFirebaseAvailable) { setupLocalFallbackUser(); return; }
             const email = document.getElementById('auth-email').value.trim();
             const password = document.getElementById('auth-password').value;
             if(!email || !password) return;
@@ -363,70 +314,59 @@
         });
 
         document.getElementById('google-login-btn').addEventListener('click', async () => {
-            if (!isFirebaseAvailable) { setupLocalFallbackUser(); return; }
             try {
                 await signInWithPopup(auth, googleProvider);
             } catch (e) {
-                alert("Google 登入失效: " + e.message);
+                alert("Google 登入失敗: " + e.message);
             }
         });
 
         document.getElementById('guest-login-btn').addEventListener('click', async () => {
-            if (!isFirebaseAvailable) { setupLocalFallbackUser(); return; }
             try {
                 await signInAnonymously(auth);
             } catch (e) {
-                alert("訪客通道建立失敗: " + e.message);
+                alert("訪客通道登入失敗: " + e.message);
             }
         });
 
         document.getElementById('logout-btn').addEventListener('click', async () => {
             if (timerInterval) window.pauseTask(currentTimingIndex);
-            if (!isFirebaseAvailable) {
-                currentUser = null;
-                authModal.style.display = 'flex';
-                setTimeout(() => authModal.classList.remove('opacity-0', 'pointer-events-none'), 50);
-                appWrapper.style.display = 'none';
-                return;
-            }
             await signOut(auth);
         });
 
         // 雲端帳戶變更監聽器
-        if (isFirebaseAvailable) {
-            onAuthStateChanged(auth, (user) => {
-                if (user) {
-                    currentUser = user;
-                    authModal.classList.add('opacity-0', 'pointer-events-none');
-                    setTimeout(() => authModal.style.display = 'none', 300);
-                    appWrapper.style.display = 'flex';
-                    
-                    if (user.isAnonymous) {
-                        userEmailDisplay.textContent = "匿名專注沙盒 (數據已在雲端保護)";
-                        accountTypeBadge.textContent = "訪客模式";
-                        accountTypeBadge.className = "text-[10px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/30";
-                    } else {
-                        userEmailDisplay.textContent = user.email;
-                        accountTypeBadge.textContent = "安全雲端同步";
-                        accountTypeBadge.className = "text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/30";
-                    }
-                    initSyncPipeline();
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                currentUser = user;
+                authModal.classList.add('opacity-0', 'pointer-events-none');
+                setTimeout(() => authModal.style.display = 'none', 300);
+                appWrapper.style.display = 'flex';
+                
+                if (user.isAnonymous) {
+                    userEmailDisplay.textContent = "匿名專注沙盒 (數據已在雲端保護)";
+                    accountTypeBadge.textContent = "訪客模式";
+                    accountTypeBadge.className = "text-[10px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/30";
                 } else {
-                    currentUser = null;
-                    authModal.style.display = 'flex';
-                    setTimeout(() => authModal.classList.remove('opacity-0', 'pointer-events-none'), 50);
-                    appWrapper.style.display = 'none';
+                    userEmailDisplay.textContent = user.email;
+                    accountTypeBadge.textContent = "安全雲端同步";
+                    accountTypeBadge.className = "text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/30";
                 }
-            });
-        }
+                initSyncPipeline();
+            } else {
+                currentUser = null;
+                authModal.style.display = 'flex';
+                setTimeout(() => authModal.classList.remove('opacity-0', 'pointer-events-none'), 50);
+                appWrapper.style.display = 'none';
+            }
+        });
 
         // === 2. 安全雲端數據流 (RULE 1 & RULE 2) ===
         let unsubscribeSync = null;
         function initSyncPipeline() {
-            if (!isFirebaseAvailable || !currentUser) return;
+            if (!currentUser) return;
             if (unsubscribeSync) unsubscribeSync();
             
-            // 安全隔離：/artifacts/{appId}/users/{userId}/userData/main
+            // 安全隔離實體路徑：/artifacts/{appId}/users/{userId}/userData/main
             const userDocRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'userData', 'main');
             
             unsubscribeSync = onSnapshot(userDocRef, (docSnap) => {
@@ -452,17 +392,6 @@
 
         async function saveToCloud() {
             if (!currentUser) return;
-            if (!isFirebaseAvailable) {
-                // 本地降級儲存
-                try {
-                    localStorage.setItem('local_todos', JSON.stringify(todos));
-                    localStorage.setItem('local_daily_history', JSON.stringify(dailyHistory));
-                    localStorage.setItem('local_avatar', userAvatarBase64);
-                } catch (e) {
-                    console.error("本機寫入出錯", e);
-                }
-                return;
-            }
             const userDocRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'userData', 'main');
             try {
                 await setDoc(userDocRef, {
