@@ -74,6 +74,11 @@
             <h2 class="text-2xl font-bold mb-2 text-white">啟動你的專注旅程</h2>
             <p class="text-slate-400 text-sm mb-6">登入以啟用安全的雲端進度同步與分析圖表</p>
             
+            <!-- Firebase 未配置時的警告提示 -->
+            <div id="config-warning" class="hidden mb-6 p-4 bg-rose-500/15 border border-rose-500/30 rounded-2xl text-rose-400 text-xs text-left leading-relaxed">
+                ⚠️ <strong class="font-bold">Firebase 未配置：</strong>偵測到未填寫 `firebaseConfig` 的金鑰連線資訊。請在 HTML 程式碼約第 250 行的 `firebaseConfig` 變數中填入您從 Firebase Console 取得的憑證，以啟用註冊與雲端同步功能。
+            </div>
+            
             <div class="space-y-3">
                 <input type="email" id="auth-email" placeholder="電子郵件" class="w-full px-4 py-3 bg-slate-900/50 border border-white/10 rounded-xl focus:border-brand-500 focus:outline-none text-white placeholder-slate-500 text-sm">
                 <input type="password" id="auth-password" placeholder="密碼" class="w-full px-4 py-3 bg-slate-900/50 border border-white/10 rounded-xl focus:border-brand-500 focus:outline-none text-white placeholder-slate-500 text-sm">
@@ -226,7 +231,7 @@
         import { getAuth, signInWithCustomToken, signInAnonymously, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // 預設與防錯配置
+        // 預設配置，當使用者尚未填寫憑證時的結構
         const firebaseConfig = {
             apiKey: "",
             authDomain: "",
@@ -248,11 +253,28 @@
             }
         }
 
-        // 初始化 Firebase 全域環境
-        const app = initializeApp(configToUse);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const googleProvider = new GoogleAuthProvider();
+        // 安全防護檢查：如果 apiKey 沒有設定，不可執行 initializeApp 以免導致 JS 拋出 auth/invalid-api-key 崩潰
+        let isFirebaseAvailable = false;
+        let app = null;
+        let auth = null;
+        let db = null;
+        let googleProvider = null;
+
+        if (configToUse && configToUse.apiKey && configToUse.apiKey.trim() !== "") {
+            try {
+                app = initializeApp(configToUse);
+                auth = getAuth(app);
+                db = getFirestore(app);
+                googleProvider = new GoogleAuthProvider();
+                isFirebaseAvailable = true;
+            } catch (err) {
+                console.error("Firebase 初始化失敗：", err);
+            }
+        } else {
+            console.warn("⚠️ Firebase 金鑰未配置，登入與儲存系統處於待命狀態。請至 Firebase 控制台填寫金鑰配置。");
+            // 顯示畫面上的友善提示
+            document.getElementById('config-warning').classList.remove('hidden');
+        }
 
         // === 系統全域變數 ===
         let currentUser = null;
@@ -280,6 +302,7 @@
 
         // === 1. 身分驗證安全機制 (RULE 3 - 先驗證，後讀寫) ===
         const initAuth = async () => {
+            if (!isFirebaseAvailable) return;
             try {
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     await signInWithCustomToken(auth, __initial_auth_token);
@@ -289,8 +312,9 @@
             }
         };
 
-        // 綁定註冊/登入按鈕事件
+        // 綁定註冊/登入按鈕事件 (加上 Firebase 可用性安全防禦)
         document.getElementById('login-btn').addEventListener('click', async () => {
+            if (!isFirebaseAvailable) { alert("尚未配置 Firebase 憑證，無法執行此操作！"); return; }
             const email = document.getElementById('auth-email').value.trim();
             const password = document.getElementById('auth-password').value;
             if(!email || !password) return;
@@ -302,6 +326,7 @@
         });
 
         document.getElementById('register-btn').addEventListener('click', async () => {
+            if (!isFirebaseAvailable) { alert("尚未配置 Firebase 憑證，無法執行此操作！"); return; }
             const email = document.getElementById('auth-email').value.trim();
             const password = document.getElementById('auth-password').value;
             if(!email || !password) return;
@@ -314,6 +339,7 @@
         });
 
         document.getElementById('google-login-btn').addEventListener('click', async () => {
+            if (!isFirebaseAvailable) { alert("尚未配置 Firebase 憑證，無法執行此操作！"); return; }
             try {
                 await signInWithPopup(auth, googleProvider);
             } catch (e) {
@@ -322,6 +348,7 @@
         });
 
         document.getElementById('guest-login-btn').addEventListener('click', async () => {
+            if (!isFirebaseAvailable) { alert("尚未配置 Firebase 憑證，無法執行此操作！"); return; }
             try {
                 await signInAnonymously(auth);
             } catch (e) {
@@ -331,39 +358,43 @@
 
         document.getElementById('logout-btn').addEventListener('click', async () => {
             if (timerInterval) window.pauseTask(currentTimingIndex);
-            await signOut(auth);
+            if (isFirebaseAvailable) {
+                await signOut(auth);
+            }
         });
 
         // 雲端帳戶變更監聽器
-        onAuthStateChanged(auth, (user) => {
-            if (user) {
-                currentUser = user;
-                authModal.classList.add('opacity-0', 'pointer-events-none');
-                setTimeout(() => authModal.style.display = 'none', 300);
-                appWrapper.style.display = 'flex';
-                
-                if (user.isAnonymous) {
-                    userEmailDisplay.textContent = "匿名專注沙盒 (數據已在雲端保護)";
-                    accountTypeBadge.textContent = "訪客模式";
-                    accountTypeBadge.className = "text-[10px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/30";
+        if (isFirebaseAvailable) {
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    currentUser = user;
+                    authModal.classList.add('opacity-0', 'pointer-events-none');
+                    setTimeout(() => authModal.style.display = 'none', 300);
+                    appWrapper.style.display = 'flex';
+                    
+                    if (user.isAnonymous) {
+                        userEmailDisplay.textContent = "匿名專注沙盒 (數據已在雲端保護)";
+                        accountTypeBadge.textContent = "訪客模式";
+                        accountTypeBadge.className = "text-[10px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/30";
+                    } else {
+                        userEmailDisplay.textContent = user.email;
+                        accountTypeBadge.textContent = "安全雲端同步";
+                        accountTypeBadge.className = "text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/30";
+                    }
+                    initSyncPipeline();
                 } else {
-                    userEmailDisplay.textContent = user.email;
-                    accountTypeBadge.textContent = "安全雲端同步";
-                    accountTypeBadge.className = "text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/30";
+                    currentUser = null;
+                    authModal.style.display = 'flex';
+                    setTimeout(() => authModal.classList.remove('opacity-0', 'pointer-events-none'), 50);
+                    appWrapper.style.display = 'none';
                 }
-                initSyncPipeline();
-            } else {
-                currentUser = null;
-                authModal.style.display = 'flex';
-                setTimeout(() => authModal.classList.remove('opacity-0', 'pointer-events-none'), 50);
-                appWrapper.style.display = 'none';
-            }
-        });
+            });
+        }
 
         // === 2. 安全雲端數據流 (RULE 1 & RULE 2) ===
         let unsubscribeSync = null;
         function initSyncPipeline() {
-            if (!currentUser) return;
+            if (!isFirebaseAvailable || !currentUser) return;
             if (unsubscribeSync) unsubscribeSync();
             
             // 安全隔離實體路徑：/artifacts/{appId}/users/{userId}/userData/main
@@ -391,7 +422,7 @@
         }
 
         async function saveToCloud() {
-            if (!currentUser) return;
+            if (!isFirebaseAvailable || !currentUser) return;
             const userDocRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'userData', 'main');
             try {
                 await setDoc(userDocRef, {
