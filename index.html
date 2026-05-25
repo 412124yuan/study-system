@@ -76,7 +76,7 @@
             
             <!-- Firebase 未配置時的警告提示 -->
             <div id="config-warning" class="hidden mb-6 p-4 bg-rose-500/15 border border-rose-500/30 rounded-2xl text-rose-400 text-xs text-left leading-relaxed">
-                ⚠️ <strong class="font-bold">Firebase 未配置：</strong>偵測到未填寫 `firebaseConfig` 的金鑰連線資訊。請在 HTML 程式碼約第 250 行的 `firebaseConfig` 變數中填入您從 Firebase Console 取得的憑證，以啟用註冊與雲端同步功能。
+                ⚠️ <strong class="font-bold">Firebase 尚未就緒：</strong>目前尚未偵測到有效的 `firebaseConfig` 連線資訊。請於 HTML 程式碼內填入您從 Firebase Console 取得的憑證，以啟用註冊、登入與雲端即時同步功能。
             </div>
             
             <div class="space-y-3">
@@ -100,9 +100,9 @@
                 使用 Google 帳戶登入
             </button>
             
-            <!-- 訪客/匿名快速體驗 -->
+            <!-- 訪客/模擬體驗快速通道 -->
             <button id="guest-login-btn" class="mt-4 text-xs text-brand-500 hover:text-brand-400 font-medium underline block mx-auto transition">
-                暫不登入，以訪客身分快速體驗
+                暫不登入，以模擬模式快速體驗
             </button>
         </div>
     </div>
@@ -241,7 +241,7 @@
             appId: ""
         };
 
-        // 嚴格地偵測與讀取系統環境注入的全域變數
+        // 偵測與讀取系統環境注入的全域變數
         let configToUse = firebaseConfig;
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'study-planner-app';
 
@@ -253,14 +253,19 @@
             }
         }
 
-        // 安全防護檢查：如果 apiKey 沒有設定，不可執行 initializeApp 以免導致 JS 拋出 auth/invalid-api-key 崩潰
+        // 安全防護初始化：包裹在 try-catch 中，即使金鑰暫時無效或為空，也絕不中斷 JS 執行
         let isFirebaseAvailable = false;
         let app = null;
         let auth = null;
         let db = null;
         let googleProvider = null;
 
-        if (configToUse && configToUse.apiKey && configToUse.apiKey.trim() !== "") {
+        const hasValidKey = configToUse && 
+                             configToUse.apiKey && 
+                             configToUse.apiKey.trim() !== "" && 
+                             !configToUse.apiKey.includes("YOUR_API_KEY");
+
+        if (hasValidKey) {
             try {
                 app = initializeApp(configToUse);
                 auth = getAuth(app);
@@ -269,11 +274,15 @@
                 isFirebaseAvailable = true;
             } catch (err) {
                 console.error("Firebase 初始化失敗：", err);
+                isFirebaseAvailable = false;
             }
-        } else {
-            console.warn("⚠️ Firebase 金鑰未配置，登入與儲存系統處於待命狀態。請至 Firebase 控制台填寫金鑰配置。");
-            // 顯示畫面上的友善提示
-            document.getElementById('config-warning').classList.remove('hidden');
+        }
+
+        // 當 Firebase 無法初始化時，顯示 Modal 上的警告資訊，引導使用者配置金鑰
+        if (!isFirebaseAvailable) {
+            console.warn("⚠️ Firebase 金鑰未配置或無效。登入與雲端儲存系統處於模擬備用狀態。");
+            const warningEl = document.getElementById('config-warning');
+            if (warningEl) warningEl.classList.remove('hidden');
         }
 
         // === 系統全域變數 ===
@@ -300,7 +309,7 @@
 
         const getTodayString = () => new Date().toISOString().split('T')[0];
 
-        // === 1. 身分驗證安全機制 (RULE 3 - 先驗證，後讀寫) ===
+        // === 1. 身分驗證與安全降級處理 ===
         const initAuth = async () => {
             if (!isFirebaseAvailable) return;
             try {
@@ -308,13 +317,39 @@
                     await signInWithCustomToken(auth, __initial_auth_token);
                 }
             } catch (err) {
-                console.warn("憑證初始化失敗，等待使用者手動操作：", err);
+                console.warn("憑證初始化失敗，等待使用者操作：", err);
             }
         };
 
-        // 綁定註冊/登入按鈕事件 (加上 Firebase 可用性安全防禦)
+        // 安全降級：模擬在本地環境中流暢操作，供預覽測試使用
+        function enterSandboxMode() {
+            currentUser = { uid: "local-sandbox-user", email: "guest@sandbox.io" };
+            authModal.classList.add('opacity-0', 'pointer-events-none');
+            setTimeout(() => authModal.style.display = 'none', 300);
+            appWrapper.style.display = 'flex';
+            
+            userEmailDisplay.textContent = "本地模擬帳戶 (配置 Firebase 後可進行雲端同步)";
+            accountTypeBadge.textContent = "本地沙盒模式";
+            accountTypeBadge.className = "text-[10px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/30";
+            
+            // 從 LocalStorage 載入資料
+            try {
+                todos = JSON.parse(localStorage.getItem('sandbox_todos')) || [];
+                dailyHistory = JSON.parse(localStorage.getItem('sandbox_dailyHistory')) || {};
+                userAvatarBase64 = localStorage.getItem('sandbox_avatar') || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80";
+                userAvatar.src = userAvatarBase64;
+            } catch(e) {
+                console.warn("無法存取本地 LocalStorage：", e);
+            }
+            
+            renderTodos();
+            updateOverview();
+            updateChart();
+        }
+
+        // 登入事件繫結
         document.getElementById('login-btn').addEventListener('click', async () => {
-            if (!isFirebaseAvailable) { alert("尚未配置 Firebase 憑證，無法執行此操作！"); return; }
+            if (!isFirebaseAvailable) { enterSandboxMode(); return; }
             const email = document.getElementById('auth-email').value.trim();
             const password = document.getElementById('auth-password').value;
             if(!email || !password) return;
@@ -326,7 +361,7 @@
         });
 
         document.getElementById('register-btn').addEventListener('click', async () => {
-            if (!isFirebaseAvailable) { alert("尚未配置 Firebase 憑證，無法執行此操作！"); return; }
+            if (!isFirebaseAvailable) { enterSandboxMode(); return; }
             const email = document.getElementById('auth-email').value.trim();
             const password = document.getElementById('auth-password').value;
             if(!email || !password) return;
@@ -339,7 +374,7 @@
         });
 
         document.getElementById('google-login-btn').addEventListener('click', async () => {
-            if (!isFirebaseAvailable) { alert("尚未配置 Firebase 憑證，無法執行此操作！"); return; }
+            if (!isFirebaseAvailable) { enterSandboxMode(); return; }
             try {
                 await signInWithPopup(auth, googleProvider);
             } catch (e) {
@@ -348,7 +383,7 @@
         });
 
         document.getElementById('guest-login-btn').addEventListener('click', async () => {
-            if (!isFirebaseAvailable) { alert("尚未配置 Firebase 憑證，無法執行此操作！"); return; }
+            if (!isFirebaseAvailable) { enterSandboxMode(); return; }
             try {
                 await signInAnonymously(auth);
             } catch (e) {
@@ -360,11 +395,16 @@
             if (timerInterval) window.pauseTask(currentTimingIndex);
             if (isFirebaseAvailable) {
                 await signOut(auth);
+            } else {
+                currentUser = null;
+                authModal.style.display = 'flex';
+                setTimeout(() => authModal.classList.remove('opacity-0', 'pointer-events-none'), 50);
+                appWrapper.style.display = 'none';
             }
         });
 
-        // 雲端帳戶變更監聽器
-        if (isFirebaseAvailable) {
+        // 雲端帳戶變更監聽器 (防禦性保護)
+        if (isFirebaseAvailable && auth) {
             onAuthStateChanged(auth, (user) => {
                 if (user) {
                     currentUser = user;
@@ -394,7 +434,7 @@
         // === 2. 安全雲端數據流 (RULE 1 & RULE 2) ===
         let unsubscribeSync = null;
         function initSyncPipeline() {
-            if (!isFirebaseAvailable || !currentUser) return;
+            if (!isFirebaseAvailable || !currentUser || !db) return;
             if (unsubscribeSync) unsubscribeSync();
             
             // 安全隔離實體路徑：/artifacts/{appId}/users/{userId}/userData/main
@@ -422,7 +462,20 @@
         }
 
         async function saveToCloud() {
-            if (!isFirebaseAvailable || !currentUser) return;
+            if (!currentUser) return;
+            
+            if (!isFirebaseAvailable || !db) {
+                // 如果 Firebase 尚未啟用，將資料保存在本地端快取，絕不中斷 UI 操作
+                try {
+                    localStorage.setItem('sandbox_todos', JSON.stringify(todos));
+                    localStorage.setItem('sandbox_dailyHistory', JSON.stringify(dailyHistory));
+                    localStorage.setItem('sandbox_avatar', userAvatarBase64);
+                } catch(e) {
+                    console.warn("無法寫入 LocalStorage 快取", e);
+                }
+                return;
+            }
+
             const userDocRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'userData', 'main');
             try {
                 await setDoc(userDocRef, {
