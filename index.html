@@ -200,7 +200,7 @@
                     <!-- Spotify 播放器 -->
                     <div class="mb-6 rounded-2xl overflow-hidden border border-white/5 bg-slate-900/40 p-1">
                         <span class="text-[11px] text-slate-500 block px-2 py-1 font-bold">SPOTIFY LO-FI BEATS</span>
-                        <iframe style="border-radius:12px" src="https://open.spotify.com/embed/playlist/37i9dQZF1DWWQRwui0ExPn?utm_source=generator&theme=0" width="100%" height="152" frameBorder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>
+                        <iframe style="border-radius:12px" src="https://open.spotify.com/embed/playlist/37i9dQZF1DWWQRwui0ExPn?utm_source=generator&theme=0" width="100%" height="152" frameBorder="0" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>
                     </div>
 
                     <!-- YouTube 播放器 -->
@@ -226,7 +226,7 @@
         import { getAuth, signInWithCustomToken, signInAnonymously, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // Firebase 專案連線配置 (此處保留空字串，執行環境會於執行期動態帶入憑證)
+        // 預設與防錯配置
         const firebaseConfig = {
             apiKey: "",
             authDomain: "",
@@ -236,15 +236,41 @@
             appId: ""
         };
 
-        // 安全地讀取全域環境變數並初始化
-        const configToUse = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : firebaseConfig;
-        const app = initializeApp(configToUse);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const googleProvider = new GoogleAuthProvider();
+        // 安全地偵測與讀取系統環境注入的全域變數
+        let configToUse = null;
+        let isFirebaseAvailable = false;
+        let auth = null;
+        let db = null;
+        let googleProvider = null;
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'study-planner-app';
 
-        // === 系統狀態主控 ===
+        try {
+            if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+                const envConfig = JSON.parse(__firebase_config);
+                // 檢查是否具有合法的 API 密鑰，防止 invalid-api-key 崩潰
+                if (envConfig && envConfig.apiKey && envConfig.apiKey.trim() !== "") {
+                    configToUse = envConfig;
+                }
+            }
+        } catch (e) {
+            console.warn("環境解析 Firebase 配置出錯：", e);
+        }
+
+        // 當系統無動態憑證注入時，使用本機儲存（LocalStorage）作為優雅的降級容錯保護，不讓程式碼出錯中斷
+        if (configToUse) {
+            try {
+                const app = initializeApp(configToUse);
+                auth = getAuth(app);
+                db = getFirestore(app);
+                googleProvider = new GoogleAuthProvider();
+                isFirebaseAvailable = true;
+            } catch (err) {
+                console.error("Firebase 初始化出錯，進入本機儲存降級模式：", err);
+                isFirebaseAvailable = false;
+            }
+        }
+
+        // === 系統全域變數 ===
         let currentUser = null;
         let todos = [];
         let dailyHistory = {};
@@ -268,21 +294,51 @@
 
         const getTodayString = () => new Date().toISOString().split('T')[0];
 
-        // === 1. 認證防禦 (RULE 3 - 先驗證，後讀寫) ===
+        // === 1. 身分驗證安全機制 (RULE 3 - 先驗證，後讀寫) ===
         const initAuth = async () => {
+            if (!isFirebaseAvailable) {
+                // Firebase 無法使用時，模擬自動登入，使 Canvas 預覽能立即流暢運行
+                setupLocalFallbackUser();
+                return;
+            }
             try {
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     await signInWithCustomToken(auth, __initial_auth_token);
                 } else {
-                    // 若無預設憑證，預留使用者選擇或預設背景匿名沙盒以防爆錯
+                    // 若無自訂憑證則不預先動作，讓使用者手動點選「訪客」或「登入」
                 }
             } catch (err) {
-                console.error("Auth initialization failed:", err);
+                console.warn("Auth initialization failed, fallback to manual selection:", err);
             }
         };
 
-        // 綁定傳統 Email 登入註冊事件
+        // 模擬無 Firebase 時的單機降級沙盒
+        function setupLocalFallbackUser() {
+            currentUser = { uid: "local-user-fallback", email: "guest@offline-sandbox.io", isAnonymous: true };
+            authModal.classList.add('opacity-0', 'pointer-events-none');
+            setTimeout(() => authModal.style.display = 'none', 300);
+            appWrapper.style.display = 'flex';
+            userEmailDisplay.textContent = "本地離線沙盒 (數據暫存於本機)";
+            accountTypeBadge.textContent = "離線模式";
+            accountTypeBadge.className = "text-[10px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/30";
+            
+            // 讀取 LocalStorage 進度
+            try {
+                todos = JSON.parse(localStorage.getItem('local_todos')) || [];
+                dailyHistory = JSON.parse(localStorage.getItem('local_daily_history')) || {};
+                userAvatarBase64 = localStorage.getItem('local_avatar') || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80";
+                userAvatar.src = userAvatarBase64;
+            } catch (e) {
+                console.error("讀取本地儲存失敗", e);
+            }
+            renderTodos();
+            updateOverview();
+            updateChart();
+        }
+
+        // 綁定註冊/登入按鈕事件 (僅在 Firebase 啟用時生效)
         document.getElementById('login-btn').addEventListener('click', async () => {
+            if (!isFirebaseAvailable) { setupLocalFallbackUser(); return; }
             const email = document.getElementById('auth-email').value.trim();
             const password = document.getElementById('auth-password').value;
             if(!email || !password) return;
@@ -294,6 +350,7 @@
         });
 
         document.getElementById('register-btn').addEventListener('click', async () => {
+            if (!isFirebaseAvailable) { setupLocalFallbackUser(); return; }
             const email = document.getElementById('auth-email').value.trim();
             const password = document.getElementById('auth-password').value;
             if(!email || !password) return;
@@ -305,8 +362,8 @@
             }
         });
 
-        // 綁定 Google 一鍵登入
         document.getElementById('google-login-btn').addEventListener('click', async () => {
+            if (!isFirebaseAvailable) { setupLocalFallbackUser(); return; }
             try {
                 await signInWithPopup(auth, googleProvider);
             } catch (e) {
@@ -314,8 +371,8 @@
             }
         });
 
-        // 訪客快速通道
         document.getElementById('guest-login-btn').addEventListener('click', async () => {
+            if (!isFirebaseAvailable) { setupLocalFallbackUser(); return; }
             try {
                 await signInAnonymously(auth);
             } catch (e) {
@@ -323,47 +380,53 @@
             }
         });
 
-        // 登出系統
         document.getElementById('logout-btn').addEventListener('click', async () => {
             if (timerInterval) window.pauseTask(currentTimingIndex);
-            await signOut(auth);
-        });
-
-        // 狀態監聽監控器 (RULE 3 - Auth state change listener)
-        onAuthStateChanged(auth, (user) => {
-            if (user) {
-                currentUser = user;
-                authModal.classList.add('opacity-0', 'pointer-events-none');
-                setTimeout(() => authModal.style.display = 'none', 300);
-                appWrapper.style.display = 'flex';
-                
-                // 設定帳戶屬性標籤
-                if (user.isAnonymous) {
-                    userEmailDisplay.textContent = "訪客沙盒帳戶 (暫時雲端儲存)";
-                    accountTypeBadge.textContent = "訪客模式";
-                    accountTypeBadge.className = "text-[10px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/30";
-                } else {
-                    userEmailDisplay.textContent = user.email;
-                    accountTypeBadge.textContent = "安全雲端同步";
-                    accountTypeBadge.className = "text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/30";
-                }
-                
-                // 進入雲端數據監聽
-                initSyncPipeline();
-            } else {
+            if (!isFirebaseAvailable) {
                 currentUser = null;
                 authModal.style.display = 'flex';
                 setTimeout(() => authModal.classList.remove('opacity-0', 'pointer-events-none'), 50);
                 appWrapper.style.display = 'none';
+                return;
             }
+            await signOut(auth);
         });
 
-        // === 2. 安全路徑雲端數據監聽管道 (RULE 1 & RULE 2) ===
+        // 雲端帳戶變更監聽器
+        if (isFirebaseAvailable) {
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    currentUser = user;
+                    authModal.classList.add('opacity-0', 'pointer-events-none');
+                    setTimeout(() => authModal.style.display = 'none', 300);
+                    appWrapper.style.display = 'flex';
+                    
+                    if (user.isAnonymous) {
+                        userEmailDisplay.textContent = "匿名專注沙盒 (數據已在雲端保護)";
+                        accountTypeBadge.textContent = "訪客模式";
+                        accountTypeBadge.className = "text-[10px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/30";
+                    } else {
+                        userEmailDisplay.textContent = user.email;
+                        accountTypeBadge.textContent = "安全雲端同步";
+                        accountTypeBadge.className = "text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/30";
+                    }
+                    initSyncPipeline();
+                } else {
+                    currentUser = null;
+                    authModal.style.display = 'flex';
+                    setTimeout(() => authModal.classList.remove('opacity-0', 'pointer-events-none'), 50);
+                    appWrapper.style.display = 'none';
+                }
+            });
+        }
+
+        // === 2. 安全雲端數據流 (RULE 1 & RULE 2) ===
         let unsubscribeSync = null;
         function initSyncPipeline() {
+            if (!isFirebaseAvailable || !currentUser) return;
             if (unsubscribeSync) unsubscribeSync();
             
-            // 嚴格依照 RULE 1 設定用戶數據儲存實體路徑：/artifacts/{appId}/users/{userId}/{collectionName}/{documentId}
+            // 安全隔離：/artifacts/{appId}/users/{userId}/userData/main
             const userDocRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'userData', 'main');
             
             unsubscribeSync = onSnapshot(userDocRef, (docSnap) => {
@@ -374,7 +437,6 @@
                     userAvatarBase64 = data.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80";
                     userAvatar.src = userAvatarBase64;
                 } else {
-                    // 全新帳號：初始化對應實體
                     todos = [];
                     dailyHistory = {};
                     userAvatarBase64 = currentUser.photoURL || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80";
@@ -384,12 +446,23 @@
                 updateOverview();
                 updateChart();
             }, (error) => {
-                console.error("Firestore sync fail (Permissions or indexing error):", error);
+                console.error("Firestore 同步通道異常：", error);
             });
         }
 
         async function saveToCloud() {
             if (!currentUser) return;
+            if (!isFirebaseAvailable) {
+                // 本地降級儲存
+                try {
+                    localStorage.setItem('local_todos', JSON.stringify(todos));
+                    localStorage.setItem('local_daily_history', JSON.stringify(dailyHistory));
+                    localStorage.setItem('local_avatar', userAvatarBase64);
+                } catch (e) {
+                    console.error("本機寫入出錯", e);
+                }
+                return;
+            }
             const userDocRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'userData', 'main');
             try {
                 await setDoc(userDocRef, {
@@ -398,18 +471,17 @@
                     avatar: userAvatarBase64
                 }, { merge: true });
             } catch (err) {
-                console.error("Cloud push failed:", err);
+                console.error("雲端存取失敗：", err);
             }
         }
 
-        // === 3. Base64 智能圖片壓縮與儲存 ===
+        // === 3. 大頭貼 Base64 化壓縮機制 ===
         avatarInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (!file) return;
 
-            // 限制圖片大小在 1MB 內，避免 base64 超出單一 Document 的 limit (16MB)
             if (file.size > 1024 * 1024) {
-                alert("安全防護：上傳頭像檔案請勿大於 1MB。");
+                alert("安全提示：請上傳 1MB 以下的頭像圖片，避免影響傳輸效率！");
                 return;
             }
 
@@ -422,7 +494,7 @@
             reader.readAsDataURL(file);
         });
 
-        // === 4. 時間流控制與 UI 繪製 ===
+        // === 4. UI 繪製與時鐘控制 ===
         function formatTime(totalSecs) {
             const hrs = Math.floor(totalSecs / 3600).toString().padStart(2, '0');
             const mins = Math.floor((totalSecs % 3600) / 60).toString().padStart(2, '0');
@@ -450,12 +522,11 @@
             const labels = [];
             const data = [];
             
-            // 整理近 7 日數據
             for (let i = 6; i >= 0; i--) {
                 const d = new Date();
                 d.setDate(d.getDate() - i);
                 const dateStr = d.toISOString().split('T')[0];
-                labels.push(dateStr.substring(5)); // 取 MM-DD
+                labels.push(dateStr.substring(5));
                 
                 const mins = Math.round((dailyHistory[dateStr] || 0) / 60);
                 data.push(mins);
@@ -528,7 +599,7 @@
                             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1V5a1 1 0 0 0-1-1H5zm7 0a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1V5a1 1 0 0 0-1-1h-3z" clip-rule="evenodd"/></svg>
                         </button>
                         <button class="w-8 h-8 rounded-lg flex items-center justify-center bg-brand-500/10 text-brand-400 hover:bg-brand-500 hover:text-white transition disabled:opacity-30" onclick="stopTask(${index})" ${currentTimingIndex !== index ? 'disabled' : ''}>
-                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM8 7a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1H8z" clip-rule="evenodd"/></svg>
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM8 7a1 1 0 0 0-1 1v4a1 1 0 0 0 1-1H8z" clip-rule="evenodd"/></svg>
                         </button>
                         <button class="w-8 h-8 rounded-lg flex items-center justify-center bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white transition disabled:opacity-30" onclick="deleteTask(${index})" ${currentTimingIndex === index ? 'disabled' : ''}>
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
@@ -539,7 +610,7 @@
             });
         }
 
-        // === 5. 計時器與按鈕機制 (正向計時) ===
+        // === 5. 正向計時調度機制 ===
         window.startTask = function(index) {
             if (currentTimingIndex !== null && currentTimingIndex !== index) {
                 alert(`溫馨防呆：您正專注在「${todos[currentTimingIndex].text}」，請先暫停或完成該項專注！`);
@@ -553,7 +624,6 @@
                 const todayStr = getTodayString();
                 dailyHistory[todayStr] = (dailyHistory[todayStr] || 0) + 1;
                 
-                // 即時刷新上方面板總時間
                 totalTimeDisplay.textContent = formatTime(dailyHistory[todayStr]);
             }, 1000);
         };
@@ -563,6 +633,9 @@
             timerInterval = null;
             currentTimingIndex = null;
             saveToCloud();
+            renderTodos();
+            updateOverview();
+            updateChart();
         };
 
         window.stopTask = function(index) {
@@ -571,12 +644,18 @@
             currentTimingIndex = null;
             todos[index].completed = true;
             saveToCloud();
+            renderTodos();
+            updateOverview();
+            updateChart();
         };
 
         window.deleteTask = function(index) {
-            if (confirm("確定要刪除此專注計畫嗎？相關進度與計時數據也將被抹除。")) {
+            if (confirm("確定要刪除此專注計畫嗎？")) {
                 todos.splice(index, 1);
                 saveToCloud();
+                renderTodos();
+                updateOverview();
+                updateChart();
             }
         };
 
@@ -589,9 +668,12 @@
             todos.push({ text: text, completed: false, secondsSpent: 0 });
             todoInput.value = '';
             saveToCloud();
+            renderTodos();
+            updateOverview();
+            updateChart();
         }
 
-        // 初始化安全性載入流程
+        // 啟動安全性認證
         initAuth();
     </script>
 </body>
