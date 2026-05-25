@@ -3,400 +3,415 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>雲端讀書管理系統 Pro (單網頁整合版)</title>
+    <title>✦ 讀書時光 | 雲端智能讀書管理系統</title>
     
+    <!-- Tailwind CSS 現代化 UI 框架 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js 數據可視化圖表 -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f7ff',
+                            100: '#e0effe',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            900: '#1e3a8a',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
     <style>
-        :root {
-            --primary-color: #3498db;
-            --success-color: #2ecc71;
-            --warning-color: #f1c40f;
-            --danger-color: #e74c3c;
-            --dark-color: #2c3e50;
-            --light-color: #ecf0f1;
-        }
-
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&display=swap');
+        
         body {
-            font-family: 'Segoe UI', Arial, sans-serif;
-            background-color: #f5f7fa;
-            color: var(--dark-color);
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            justify-content: center;
-            align-items: flex-start;
+            font-family: 'Plus Jakarta Sans', 'Noto Sans TC', sans-serif;
+            background: radial-gradient(circle at top right, rgba(59, 130, 246, 0.08), transparent 40%),
+                        radial-gradient(circle at bottom left, rgba(37, 99, 235, 0.05), transparent 40%),
+                        #0b0f19;
+            color: #f1f5f9;
+            min-height: 100vh;
         }
 
-        /* 最外層大框架（實現左右並排） */
-        .main-wrapper {
-            display: flex;
-            gap: 25px;
-            width: 100%;
-            max-width: 1000px;
-            flex-wrap: wrap;
-            justify-content: center;
+        .glass-panel {
+            background: rgba(17, 24, 39, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
         }
 
-        /* 左側讀書主面板 */
-        .container {
-            background: white;
-            padding: 30px;
-            border-radius: 16px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.05);
-            width: 100%;
-            max-width: 550px;
-            flex: 1;
-            min-width: 350px;
+        /* 自訂美化捲軸 */
+        ::-webkit-scrollbar {
+            width: 6px;
         }
-
-        /* 標題與登出列 */
-        .header-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.5);
         }
-        .header-row h1 { margin: 0; font-size: 1.5rem; }
-
-        /* 密碼登入遮罩視窗 */
-        .modal {
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(44, 62, 80, 0.8);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
+        ::-webkit-scrollbar-thumb {
+            background: rgba(59, 130, 246, 0.3);
+            border-radius: 99px;
         }
-        .modal-content {
-            background: white;
-            padding: 40px;
-            border-radius: 16px;
-            width: 90%;
-            max-width: 400px;
-            text-align: center;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(59, 130, 246, 0.6);
         }
-        .input-group-vertical input {
-            width: 100%;
-            padding: 12px;
-            margin: 10px 0;
-            border: 2px solid #ddd;
-            border-radius: 8px;
-            box-sizing: border-box;
-            font-size: 1rem;
-        }
-        .modal-buttons {
-            display: flex;
-            gap: 10px;
-            margin-top: 20px;
-        }
-        .modal-buttons button { flex: 1; padding: 12px; font-size: 1rem; }
-        .secondary-btn { background-color: #95a5a6; }
-
-        /* Google 登入按鈕與分隔線 */
-        .divider {
-            margin: 20px 0;
-            text-align: center;
-            position: relative;
-        }
-        .divider::before {
-            content: ""; position: absolute; top: 50%; left: 0; right: 0;
-            height: 1px; background: #ddd; z-index: 1;
-        }
-        .divider span {
-            background: white; padding: 0 15px; position: relative; z-index: 2; color: #95a5a6; font-size: 0.9rem;
-        }
-        .google-btn {
-            width: 100%; padding: 12px; border: 1px solid #dadce0; border-radius: 8px;
-            background: white; color: #3c4043; font-size: 1rem; font-weight: 500;
-            display: flex; align-items: center; justify-content: center; gap: 10px; cursor: pointer; transition: background 0.2s;
-        }
-        .google-btn:hover { background: #f8f9fa; }
-        .google-btn img { width: 20px; height: 20px; }
-
-        /* 個人頭像區域 */
-        .user-profile {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-        .avatar-wrapper {
-            position: relative; width: 50px; height: 50px;
-            border-radius: 50%; overflow: hidden; border: 2px solid var(--primary-color);
-        }
-        #user-avatar {
-            width: 100%; height: 100%; object-fit: cover;
-        }
-        .upload-label {
-            position: absolute; bottom: 0; left: 0; right: 0;
-            background: rgba(0,0,0,0.6); color: white; font-size: 0.7rem;
-            text-align: center; padding: 2px 0; cursor: pointer;
-            opacity: 0; transition: opacity 0.2s;
-        }
-        .avatar-wrapper:hover .upload-label { opacity: 1; }
-
-        /* 今日總覽數據 */
-        .overview-section {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            background: #fdfdfd;
-            padding: 20px;
-            border-radius: 12px;
-            border: 1px solid #eee;
-            margin-top: 15px;
-        }
-        .total-time-box h3, .progress-box h3 { margin: 0 0 10px 0; font-size: 1rem; color: #7f8c8d; }
-        #total-time-display {
-            font-size: 1.8rem;
-            font-weight: bold;
-            color: var(--dark-color);
-            background: #eef2f7;
-            padding: 10px;
-            border-radius: 8px;
-            text-align: center;
-        }
-        .progress-bar-container {
-            background: #e0e0e0;
-            border-radius: 10px;
-            overflow: hidden;
-        }
-        #progress-bar {
-            width: 0%;
-            background: var(--success-color);
-            color: white;
-            text-align: center;
-            padding: 6px 0;
-            font-size: 0.9rem;
-            font-weight: bold;
-            transition: width 0.4s ease;
-        }
-
-        /* 折線圖區塊 */
-        .chart-section {
-            margin-top: 25px;
-            background: #fcfcfc;
-            padding: 15px;
-            border-radius: 12px;
-            border: 1px solid #eee;
-        }
-        .chart-section h3 { margin: 0 0 15px 0; font-size: 0.95rem; color: #7f8c8d; }
-
-        hr { border: 0; height: 1px; background: #ddd; margin: 25px 0; }
-
-        /* 任務輸入框與清單 */
-        .input-group { display: flex; margin-bottom: 20px; }
-        #todo-input {
-            flex: 1; padding: 12px; border: 2px solid #ddd;
-            border-radius: 8px 0 0 8px; font-size: 1rem; outline: none;
-        }
-        #todo-input:focus { border-color: var(--primary-color); }
-        #add-btn {
-            padding: 0 20px; background: var(--primary-color); color: white;
-            border: none; border-radius: 0 8px 8px 0; cursor: pointer; font-size: 1rem;
-        }
-        ul { list-style: none; padding: 0; margin: 0; }
-        li {
-            background: var(--light-color); padding: 15px; margin-bottom: 10px;
-            border-radius: 8px; display: flex; justify-content: space-between; align-items: center;
-        }
-        li.completed { background: #e8f8f5; opacity: 0.8; }
-        li.completed .task-text { text-decoration: line-through; color: #95a5a6; }
-        li.timing { border-left: 5px solid var(--primary-color); background: #ebf5fb; }
-        .task-text { font-weight: 500; flex-grow: 1; margin-right: 10px; }
-
-        /* 功能按鈕群組 */
-        .btn-group { display: flex; gap: 5px; }
-        .btn-group button { border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; color: white; font-size: 0.85rem; }
-        .start-btn { background: var(--success-color); }
-        .pause-btn { background: var(--warning-color); color: #333; }
-        .stop-btn { background: var(--dark-color); }
-        .del-btn { background: var(--danger-color); }
-        button:disabled { background: #bdc3c7; cursor: not-allowed; opacity: 0.6; }
-
-        /* 右側音樂專區 */
-        .music-container {
-            background: white; padding: 30px; border-radius: 16px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.05); width: 100%;
-            max-width: 380px; flex: 1; min-width: 320px;
-        }
-        .music-box { margin-bottom: 20px; }
-        .music-box h3 { font-size: 0.95rem; color: #7f8c8d; margin-bottom: 8px; }
     </style>
 </head>
-<body>
+<body class="p-4 md:p-8 flex items-center justify-center">
 
-    <div id="auth-modal" class="modal">
-        <div class="modal-content">
-            <h2>🔐 歡迎使用讀書管理系統</h2>
-            <div class="input-group-vertical">
-                <input type="email" id="auth-email" placeholder="電子郵件">
-                <input type="password" id="auth-password" placeholder="密碼">
+    <!-- 1. 統一登入/登冊控制面板 Modal -->
+    <div id="auth-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-50 p-4 transition-all duration-300">
+        <div class="glass-panel p-8 rounded-3xl max-w-md w-full shadow-2xl border border-white/10 text-center animate-fade-in">
+            <div class="inline-flex p-3 bg-brand-500/10 rounded-2xl text-brand-500 mb-4">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
             </div>
-            <div class="modal-buttons">
-                <button id="login-btn">登入</button>
-                <button id="register-btn" class="secondary-btn">註冊</button>
+            <h2 class="text-2xl font-bold mb-2 text-white">啟動你的專注旅程</h2>
+            <p class="text-slate-400 text-sm mb-6">登入以啟用安全的雲端進度同步與分析圖表</p>
+            
+            <div class="space-y-3">
+                <input type="email" id="auth-email" placeholder="電子郵件" class="w-full px-4 py-3 bg-slate-900/50 border border-white/10 rounded-xl focus:border-brand-500 focus:outline-none text-white placeholder-slate-500 text-sm">
+                <input type="password" id="auth-password" placeholder="密碼" class="w-full px-4 py-3 bg-slate-900/50 border border-white/10 rounded-xl focus:border-brand-500 focus:outline-none text-white placeholder-slate-500 text-sm">
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 mt-4">
+                <button id="login-btn" class="w-full bg-brand-600 hover:bg-brand-500 text-white font-medium py-3 px-4 rounded-xl transition text-sm">登入</button>
+                <button id="register-btn" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium py-3 px-4 rounded-xl transition text-sm">註冊新帳號</button>
             </div>
             
-            <div class="divider"><span>或</span></div>
+            <div class="relative my-6">
+                <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-white/10"></div></div>
+                <div class="relative text-xs text-slate-500 uppercase"><span class="bg-slate-950 px-3">或</span></div>
+            </div>
 
-            <button id="google-login-btn" class="google-btn">
-                <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="Google Logo">
-                使用 Google 帳號登入
+            <!-- Google 一鍵快捷登入 -->
+            <button id="google-login-btn" class="w-full flex items-center justify-center gap-3 bg-white hover:bg-slate-100 text-slate-900 font-medium py-3 px-4 rounded-xl transition text-sm shadow-lg">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" class="w-5 h-5" alt="Google">
+                使用 Google 帳戶登入
+            </button>
+            
+            <!-- 訪客/匿名快速體驗 -->
+            <button id="guest-login-btn" class="mt-4 text-xs text-brand-500 hover:text-brand-400 font-medium underline block mx-auto transition">
+                暫不登入，以訪客身分快速體驗
             </button>
         </div>
     </div>
 
-    <div id="app-wrapper" class="main-wrapper" style="display: none;">
+    <!-- 2. 主視窗介面 (認證通過後渲染) -->
+    <div id="app-wrapper" class="main-wrapper w-full max-w-6xl gap-6 flex flex-col lg:flex-row items-stretch" style="display: none;">
         
-        <div class="container">
-            <div class="header-row">
-                <div class="user-profile">
-                    <div class="avatar-wrapper">
-                        <img id="user-avatar" src="https://via.placeholder.com/50" alt="大頭貼">
-                        <input type="file" id="avatar-input" accept="image/*" style="display: none;">
-                        <label for="avatar-input" class="upload-label">更換</label>
+        <!-- 左側主視窗：大盤控制、圖表與任務 -->
+        <div class="flex-1 flex flex-col gap-6">
+            
+            <!-- 個人資訊 & 總時數儀表板 -->
+            <div class="glass-panel p-6 rounded-3xl flex flex-col md:flex-row items-start md:items-center justify-between gap-6 shadow-xl">
+                <!-- 個人帳戶 Profile -->
+                <div class="flex items-center gap-4">
+                    <div class="relative w-16 h-16 rounded-full overflow-hidden border-2 border-brand-500 group cursor-pointer shadow-lg shadow-brand-500/20">
+                        <img id="user-avatar" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80" class="w-full h-full object-cover transition duration-300 group-hover:scale-110" alt="Avatar">
+                        <input type="file" id="avatar-input" accept="image/*" class="hidden">
+                        <label for="avatar-input" class="absolute inset-0 bg-slate-950/70 flex items-center justify-center text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer font-bold">上傳</label>
                     </div>
                     <div>
-                        <h1 id="welcome-title">📊 讀書管理儀表板</h1>
-                        <span id="user-email-display" style="font-size: 0.85rem; color: #7f8c8d;"></span>
+                        <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                            <span>歡迎回來，專注者</span>
+                            <span id="account-type-badge" class="text-[10px] bg-brand-500/20 text-brand-400 px-2 py-0.5 rounded-full border border-brand-500/30">雲端同步中</span>
+                        </h2>
+                        <p id="user-email-display" class="text-xs text-slate-400 font-mono mt-0.5"></p>
                     </div>
                 </div>
-                <button id="logout-btn" class="del-btn">登出</button>
+
+                <!-- 核心計時數據 -->
+                <div class="flex items-center gap-6 w-full md:w-auto">
+                    <div class="bg-slate-900/50 rounded-2xl p-4 flex-1 md:flex-initial text-center border border-white/5">
+                        <span class="text-xs text-slate-400 block mb-1">今日專注總計</span>
+                        <div id="total-time-display" class="text-xl md:text-2xl font-bold text-brand-400 font-mono">00:00:00</div>
+                    </div>
+                    <div class="bg-slate-900/50 rounded-2xl p-4 flex-1 md:flex-initial text-center border border-white/5">
+                        <span class="text-xs text-slate-400 block mb-1">任務今日達成率</span>
+                        <div class="flex items-center justify-center gap-2 mt-1">
+                            <div class="w-24 bg-slate-800 rounded-full h-2 overflow-hidden">
+                                <div id="progress-bar-fill" class="bg-emerald-500 h-full transition-all duration-500" style="width: 0%"></div>
+                            </div>
+                            <span id="progress-bar-text" class="text-sm font-bold text-emerald-400 font-mono">0%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 登出 -->
+                <button id="logout-btn" class="bg-slate-900 hover:bg-slate-800 border border-white/10 text-slate-400 hover:text-white px-4 py-2 rounded-xl text-xs transition self-stretch md:self-auto flex items-center justify-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                    登出
+                </button>
             </div>
 
-            <div class="overview-section">
-                <div class="total-time-box">
-                    <h3>今日總讀書時間</h3>
-                    <div id="total-time-display">00 小時 00 分 00 秒</div>
+            <!-- 中間大區：7日時間曲線分析圖 -->
+            <div class="glass-panel p-6 rounded-3xl shadow-xl">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-base font-bold text-white flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-brand-500"></span>
+                        讀書成效曲線（近 7 日專注分鐘數）
+                    </h3>
+                    <span class="text-xs text-slate-500 font-mono">每日深夜自動歸檔</span>
                 </div>
+                <div class="w-full h-64">
+                    <canvas id="studyChart"></canvas>
+                </div>
+            </div>
+
+            <!-- 下方大區：任務清單規劃區 -->
+            <div class="glass-panel p-6 rounded-3xl shadow-xl flex-1 flex flex-col">
+                <h3 class="text-base font-bold text-white mb-4 flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                    今日專注計劃
+                </h3>
                 
-                <div class="progress-box">
-                    <h3>今日任務完成率</h3>
-                    <div class="progress-bar-container">
-                        <div id="progress-bar">0%</div>
-                    </div>
+                <!-- 新增任務輸入區 -->
+                <div class="flex gap-2 mb-4">
+                    <input type="text" id="todo-input" placeholder="輸入你想執行的專注項目... (例如：閱讀英文雜誌)" class="flex-1 px-4 py-3 bg-slate-900/50 border border-white/10 rounded-2xl focus:border-brand-500 focus:outline-none text-white placeholder-slate-500 text-sm">
+                    <button id="add-btn" class="bg-brand-600 hover:bg-brand-500 text-white font-medium px-6 rounded-2xl transition text-sm flex items-center gap-1">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                        新增
+                    </button>
                 </div>
+
+                <!-- 任務列表 -->
+                <ul id="todo-list" class="space-y-3 flex-1 max-h-[320px] overflow-y-auto pr-1">
+                    <!-- JS 動態插入 -->
+                </ul>
             </div>
 
-            <div class="chart-section">
-                <h3>📈 每日閱讀時間曲線（近 7 日）</h3>
-                <canvas id="studyChart"></canvas>
-            </div>
-
-            <hr>
-
-            <div class="todo-section">
-                <h2>📝 今日讀書任務</h2>
-                <div class="input-group">
-                    <input type="text" id="todo-input" placeholder="輸入你想讀的科目或任務...">
-                    <button id="add-btn">新增任務</button>
-                </div>
-                <ul id="todo-list"></ul>
-            </div>
         </div>
 
-        <div class="music-container">
-            <h2>🎵 專注音樂電台</h2>
-            <div class="music-box">
-                <h3>Spotify 專注歌單</h3>
-                <iframe style="border-radius:12px" src="https://open.spotify.com/embed/playlist/37i9dQZF1DWWQRwui0ExPn?utm_source=generator&theme=0" width="100%" height="152" frameBorder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>
-            </div>
-            <div class="music-box">
-                <h3>YouTube Lofi 直播</h3>
-                <iframe width="100%" height="200" src="https://www.youtube.com/embed/jfKfPfyJRdk" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+        <!-- 右側面板：專注白噪音 / 音樂電台 -->
+        <div class="w-full lg:w-[360px] flex flex-col gap-6">
+            <div class="glass-panel p-6 rounded-3xl shadow-xl flex flex-col h-full justify-between">
+                <div>
+                    <h3 class="text-base font-bold text-white mb-4 flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-violet-500"></span>
+                        沉浸專注音樂
+                    </h3>
+                    
+                    <!-- Spotify 播放器 -->
+                    <div class="mb-6 rounded-2xl overflow-hidden border border-white/5 bg-slate-900/40 p-1">
+                        <span class="text-[11px] text-slate-500 block px-2 py-1 font-bold">SPOTIFY LO-FI BEATS</span>
+                        <iframe style="border-radius:12px" src="https://open.spotify.com/embed/playlist/37i9dQZF1DWWQRwui0ExPn?utm_source=generator&theme=0" width="100%" height="152" frameBorder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>
+                    </div>
+
+                    <!-- YouTube 播放器 -->
+                    <div class="rounded-2xl overflow-hidden border border-white/5 bg-slate-900/40 p-1">
+                        <span class="text-[11px] text-slate-500 block px-2 py-1 font-bold">YOUTUBE LO-FI GIRL LIVE</span>
+                        <div class="relative w-full h-0 pb-[56.25%] rounded-xl overflow-hidden">
+                            <iframe class="absolute top-0 left-0 w-full h-full" src="https://www.youtube.com/embed/jfKfPfyJRdk" title="YouTube Live" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-slate-900/60 border border-white/5 p-4 rounded-2xl text-center text-xs text-slate-500 mt-6">
+                    <p class="leading-relaxed">💡 專家研究：保持固定的節奏性背景白噪音可以有效提高大腦 α 波，提升專注力長達 40% 以上。</p>
+                </div>
             </div>
         </div>
 
     </div>
 
+    <!-- 3. ES 模組化 Firebase 架構 -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getAuth, signInWithCustomToken, signInAnonymously, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // 📥 填入您申請到的 Firebase 資料庫連線資訊
+        // Firebase 專案連線配置 (此處保留空字串，執行環境會於執行期動態帶入憑證)
         const firebaseConfig = {
-            apiKey: "YOUR_API_KEY",
-            authDomain: "YOUR_AUTH_DOMAIN",
-            projectId: "YOUR_PROJECT_ID",
-            storageBucket: "YOUR_STORAGE_BUCKET",
-            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-            appId: "YOUR_APP_ID"
+            apiKey: "",
+            authDomain: "",
+            projectId: "",
+            storageBucket: "",
+            messagingSenderId: "",
+            appId: ""
         };
 
-        // 初始化 Firebase 全域環境
-        const app = initializeApp(firebaseConfig);
+        // 安全地讀取全域環境變數並初始化
+        const configToUse = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : firebaseConfig;
+        const app = initializeApp(configToUse);
         const auth = getAuth(app);
         const db = getFirestore(app);
         const googleProvider = new GoogleAuthProvider();
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'study-planner-app';
 
-        // === 系統全域變數 ===
+        // === 系統狀態主控 ===
         let currentUser = null;
         let todos = [];
         let dailyHistory = {};
-        let userAvatarBase64 = "";
+        let userAvatarBase64 = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80";
         let currentTimingIndex = null;
         let timerInterval = null;
         let studyChart = null;
 
-        // === DOM 元素快取 ===
+        // === DOM 快取 ===
         const authModal = document.getElementById('auth-modal');
         const appWrapper = document.getElementById('app-wrapper');
         const totalTimeDisplay = document.getElementById('total-time-display');
-        const progressBar = document.getElementById('progress-bar');
+        const progressBarFill = document.getElementById('progress-bar-fill');
+        const progressBarText = document.getElementById('progress-bar-text');
         const todoInput = document.getElementById('todo-input');
         const todoList = document.getElementById('todo-list');
         const userAvatar = document.getElementById('user-avatar');
         const avatarInput = document.getElementById('avatar-input');
         const userEmailDisplay = document.getElementById('user-email-display');
+        const accountTypeBadge = document.getElementById('account-type-badge');
 
-        // 時間基準小工具
-        function getTodayString() { return new Date().toISOString().split('T')[0]; }
+        const getTodayString = () => new Date().toISOString().split('T')[0];
 
-        // === 1. 身分驗證模組 ===
-        document.getElementById('register-btn').addEventListener('click', async () => {
-            const email = document.getElementById('auth-email').value;
-            const password = document.getElementById('auth-password').value;
-            try { await createUserWithEmailAndPassword(auth, email, password); } catch (e) { alert("註冊失敗: " + e.message); }
-        });
+        // === 1. 認證防禦 (RULE 3 - 先驗證，後讀寫) ===
+        const initAuth = async () => {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    // 若無預設憑證，預留使用者選擇或預設背景匿名沙盒以防爆錯
+                }
+            } catch (err) {
+                console.error("Auth initialization failed:", err);
+            }
+        };
 
+        // 綁定傳統 Email 登入註冊事件
         document.getElementById('login-btn').addEventListener('click', async () => {
-            const email = document.getElementById('auth-email').value;
+            const email = document.getElementById('auth-email').value.trim();
             const password = document.getElementById('auth-password').value;
-            try { await signInWithEmailAndPassword(auth, email, password); } catch (e) { alert("登入失敗: " + e.message); }
+            if(!email || !password) return;
+            try {
+                await signInWithEmailAndPassword(auth, email, password);
+            } catch (e) {
+                alert("登入失敗: " + e.message);
+            }
         });
 
+        document.getElementById('register-btn').addEventListener('click', async () => {
+            const email = document.getElementById('auth-email').value.trim();
+            const password = document.getElementById('auth-password').value;
+            if(!email || !password) return;
+            try {
+                await createUserWithEmailAndPassword(auth, email, password);
+                alert("註冊成功！");
+            } catch (e) {
+                alert("註冊失敗: " + e.message);
+            }
+        });
+
+        // 綁定 Google 一鍵登入
         document.getElementById('google-login-btn').addEventListener('click', async () => {
-            try { await signInWithPopup(auth, googleProvider); } catch (e) { alert("Google 登入失敗: " + e.message); }
+            try {
+                await signInWithPopup(auth, googleProvider);
+            } catch (e) {
+                alert("Google 登入失效: " + e.message);
+            }
         });
 
-        document.getElementById('logout-btn').addEventListener('click', () => {
+        // 訪客快速通道
+        document.getElementById('guest-login-btn').addEventListener('click', async () => {
+            try {
+                await signInAnonymously(auth);
+            } catch (e) {
+                alert("訪客通道建立失敗: " + e.message);
+            }
+        });
+
+        // 登出系統
+        document.getElementById('logout-btn').addEventListener('click', async () => {
             if (timerInterval) window.pauseTask(currentTimingIndex);
-            signOut(auth);
+            await signOut(auth);
         });
 
+        // 狀態監聽監控器 (RULE 3 - Auth state change listener)
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 currentUser = user;
-                authModal.style.display = 'none';
+                authModal.classList.add('opacity-0', 'pointer-events-none');
+                setTimeout(() => authModal.style.display = 'none', 300);
                 appWrapper.style.display = 'flex';
-                userEmailDisplay.textContent = user.email || "Google 登入用戶";
-                initUserSync();
+                
+                // 設定帳戶屬性標籤
+                if (user.isAnonymous) {
+                    userEmailDisplay.textContent = "訪客沙盒帳戶 (暫時雲端儲存)";
+                    accountTypeBadge.textContent = "訪客模式";
+                    accountTypeBadge.className = "text-[10px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/30";
+                } else {
+                    userEmailDisplay.textContent = user.email;
+                    accountTypeBadge.textContent = "安全雲端同步";
+                    accountTypeBadge.className = "text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/30";
+                }
+                
+                // 進入雲端數據監聽
+                initSyncPipeline();
             } else {
                 currentUser = null;
                 authModal.style.display = 'flex';
+                setTimeout(() => authModal.classList.remove('opacity-0', 'pointer-events-none'), 50);
                 appWrapper.style.display = 'none';
             }
         });
 
-        // === 2. Base64 檔案轉換與儲存 ===
+        // === 2. 安全路徑雲端數據監聽管道 (RULE 1 & RULE 2) ===
+        let unsubscribeSync = null;
+        function initSyncPipeline() {
+            if (unsubscribeSync) unsubscribeSync();
+            
+            // 嚴格依照 RULE 1 設定用戶數據儲存實體路徑：/artifacts/{appId}/users/{userId}/{collectionName}/{documentId}
+            const userDocRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'userData', 'main');
+            
+            unsubscribeSync = onSnapshot(userDocRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    todos = data.todos || [];
+                    dailyHistory = data.dailyHistory || {};
+                    userAvatarBase64 = data.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80";
+                    userAvatar.src = userAvatarBase64;
+                } else {
+                    // 全新帳號：初始化對應實體
+                    todos = [];
+                    dailyHistory = {};
+                    userAvatarBase64 = currentUser.photoURL || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80";
+                    saveToCloud();
+                }
+                renderTodos();
+                updateOverview();
+                updateChart();
+            }, (error) => {
+                console.error("Firestore sync fail (Permissions or indexing error):", error);
+            });
+        }
+
+        async function saveToCloud() {
+            if (!currentUser) return;
+            const userDocRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'userData', 'main');
+            try {
+                await setDoc(userDocRef, {
+                    todos: todos,
+                    dailyHistory: dailyHistory,
+                    avatar: userAvatarBase64
+                }, { merge: true });
+            } catch (err) {
+                console.error("Cloud push failed:", err);
+            }
+        }
+
+        // === 3. Base64 智能圖片壓縮與儲存 ===
         avatarInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (!file) return;
-            if (file.size > 1024 * 1024) { alert("圖片過大，請選擇 1MB 以下的圖檔。"); return; }
+
+            // 限制圖片大小在 1MB 內，避免 base64 超出單一 Document 的 limit (16MB)
+            if (file.size > 1024 * 1024) {
+                alert("安全防護：上傳頭像檔案請勿大於 1MB。");
+                return;
+            }
 
             const reader = new FileReader();
             reader.onloadend = function () {
@@ -407,72 +422,77 @@
             reader.readAsDataURL(file);
         });
 
-        // === 3. Firestore 資料流管理 ===
-        function initUserSync() {
-            const userDocRef = doc(db, "users", currentUser.uid);
-            onSnapshot(userDocRef, (docSnap) => {
-                if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    todos = data.todos || [];
-                    dailyHistory = data.dailyHistory || {};
-                    userAvatarBase64 = data.avatar || "";
-                    
-                    if (userAvatarBase64) { userAvatar.src = userAvatarBase64; }
-                    else if (currentUser.photoURL) { userAvatar.src = currentUser.photoURL; }
-                } else {
-                    todos = []; dailyHistory = {}; userAvatarBase64 = "";
-                    saveToCloud();
-                }
-                renderTodos(); updateOverview(); updateChart();
-            });
-        }
-
-        async function saveToCloud() {
-            if (!currentUser) return;
-            const userDocRef = doc(db, "users", currentUser.uid);
-            await setDoc(userDocRef, {
-                todos: todos,
-                dailyHistory: dailyHistory,
-                avatar: userAvatarBase64
-            }, { merge: true });
-        }
-
-        // === 4. 系統格式化與儀表板渲染 ===
+        // === 4. 時間流控制與 UI 繪製 ===
         function formatTime(totalSecs) {
             const hrs = Math.floor(totalSecs / 3600).toString().padStart(2, '0');
             const mins = Math.floor((totalSecs % 3600) / 60).toString().padStart(2, '0');
             const secs = (totalSecs % 60).toString().padStart(2, '0');
-            return `${hrs} 小時 ${mins} 分 ${secs} 秒`;
+            return `${hrs}:${mins}:${secs}`;
         }
 
         function updateOverview() {
             const todaySeconds = dailyHistory[getTodayString()] || 0;
             totalTimeDisplay.textContent = formatTime(todaySeconds);
-            if (todos.length === 0) { progressBar.style.width = '0%'; progressBar.textContent = '0%'; return; }
+
+            if (todos.length === 0) {
+                progressBarFill.style.width = '0%';
+                progressBarText.textContent = '0%';
+                return;
+            }
             const completedCount = todos.filter(t => t.completed).length;
             const percent = Math.round((completedCount / todos.length) * 100);
-            progressBar.style.width = `${percent}%`; progressBar.textContent = `${percent}%`;
+            progressBarFill.style.width = `${percent}%`;
+            progressBarText.textContent = `${percent}%`;
         }
 
         function updateChart() {
             const ctx = document.getElementById('studyChart').getContext('2d');
-            const labels = []; const data = [];
+            const labels = [];
+            const data = [];
+            
+            // 整理近 7 日數據
             for (let i = 6; i >= 0; i--) {
-                const d = new Date(); d.setDate(d.getDate() - i);
+                const d = new Date();
+                d.setDate(d.getDate() - i);
                 const dateStr = d.toISOString().split('T')[0];
-                labels.push(dateStr.substring(5));
-                data.push(Math.round((dailyHistory[dateStr] || 0) / 60));
+                labels.push(dateStr.substring(5)); // 取 MM-DD
+                
+                const mins = Math.round((dailyHistory[dateStr] || 0) / 60);
+                data.push(mins);
             }
+
             if (studyChart) {
-                studyChart.data.labels = labels; studyChart.data.datasets[0].data = data; studyChart.update();
+                studyChart.data.labels = labels;
+                studyChart.data.datasets[0].data = data;
+                studyChart.update();
             } else {
                 studyChart = new Chart(ctx, {
                     type: 'line',
                     data: {
                         labels: labels,
-                        datasets: [{ label: '閱讀時間 (分鐘)', data: data, borderColor: '#3498db', backgroundColor: 'rgba(52, 152, 219, 0.1)', borderWidth: 3, tension: 0.3, fill: true }]
+                        datasets: [{
+                            label: '累計專注分鐘',
+                            data: data,
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            borderWidth: 3,
+                            tension: 0.4,
+                            fill: true,
+                            pointBackgroundColor: '#3b82f6',
+                            pointHoverRadius: 8
+                        }]
                     },
-                    options: { responsive: true, scales: { y: { beginAtZero: true } } }
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false }
+                        },
+                        scales: {
+                            x: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#94a3b8' } },
+                            y: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#94a3b8' }, beginAtZero: true }
+                        }
+                    }
                 });
             }
         }
@@ -481,48 +501,98 @@
             todoList.innerHTML = '';
             todos.forEach((todo, index) => {
                 const li = document.createElement('li');
-                if (todo.completed) li.classList.add('completed');
-                if (currentTimingIndex === index) li.classList.add('timing');
+                li.className = "flex items-center justify-between p-4 rounded-2xl bg-slate-900/40 border border-white/5 transition-all duration-300";
+                
+                if (todo.completed) {
+                    li.classList.add('bg-emerald-950/10', 'border-emerald-500/10', 'opacity-70');
+                }
+                if (currentTimingIndex === index) {
+                    li.classList.add('bg-brand-500/10', 'border-brand-500/30', 'ring-1', 'ring-brand-500/20');
+                }
+
                 const statusIcon = todo.completed ? '✅' : '⬜';
-                const timeSpentText = todo.secondsSpent > 0 ? ` (${Math.floor(todo.secondsSpent/60)}分鐘)` : '';
+                const totalMinutes = Math.floor((todo.secondsSpent || 0) / 60);
+                const totalSecondsText = todo.secondsSpent > 0 ? ` (專注累計: ${totalMinutes} 分鐘)` : '';
+
                 li.innerHTML = `
-                    <span class="task-text">${statusIcon} ${todo.text}${timeSpentText}</span>
-                    <div class="btn-group">
-                        <button class="start-btn" onclick="startTask(${index})" ${todo.completed || currentTimingIndex === index ? 'disabled' : ''}>▶️</button>
-                        <button class="pause-btn" onclick="pauseTask(${index})" ${currentTimingIndex !== index ? 'disabled' : ''}>⏸️</button>
-                        <button class="stop-btn" onclick="stopTask(${index})" ${currentTimingIndex !== index ? 'disabled' : ''}>⏹️</button>
-                        <button class="del-btn" onclick="deleteTask(${index})" ${currentTimingIndex === index ? 'disabled' : ''}>🗑️</button>
+                    <div class="flex items-center gap-3">
+                        <span class="text-sm font-semibold ${todo.completed ? 'line-through text-slate-500' : 'text-slate-200'}">
+                            ${statusIcon} ${todo.text}${totalSecondsText}
+                        </span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <button class="w-8 h-8 rounded-lg flex items-center justify-center bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500 hover:text-white transition disabled:opacity-30" onclick="startTask(${index})" ${todo.completed || currentTimingIndex === index ? 'disabled' : ''}>
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M4.516 3.248a.5.5 0 0 1 .484.052l11 7a.5.5 0 0 1 0 .8l-11 7a.5.5 0 0 1-.748-.424V3.6a.5.5 0 0 1 .264-.4a.5.5 0 0 1 .484-.052z"/></svg>
+                        </button>
+                        <button class="w-8 h-8 rounded-lg flex items-center justify-center bg-amber-500/10 text-amber-400 hover:bg-amber-500 hover:text-white transition disabled:opacity-30" onclick="pauseTask(${index})" ${currentTimingIndex !== index ? 'disabled' : ''}>
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1V5a1 1 0 0 0-1-1H5zm7 0a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1V5a1 1 0 0 0-1-1h-3z" clip-rule="evenodd"/></svg>
+                        </button>
+                        <button class="w-8 h-8 rounded-lg flex items-center justify-center bg-brand-500/10 text-brand-400 hover:bg-brand-500 hover:text-white transition disabled:opacity-30" onclick="stopTask(${index})" ${currentTimingIndex !== index ? 'disabled' : ''}>
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM8 7a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1H8z" clip-rule="evenodd"/></svg>
+                        </button>
+                        <button class="w-8 h-8 rounded-lg flex items-center justify-center bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white transition disabled:opacity-30" onclick="deleteTask(${index})" ${currentTimingIndex === index ? 'disabled' : ''}>
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                        </button>
                     </div>
                 `;
                 todoList.appendChild(li);
             });
         }
 
-        // === 5. 任務時間調度控制核心 (正向計時，掛載到 window 全域) ===
+        // === 5. 計時器與按鈕機制 (正向計時) ===
         window.startTask = function(index) {
-            if (currentTimingIndex !== null && currentTimingIndex !== index) { alert(`您正在讀「${todos[currentTimingIndex].text}」喔！`); return; }
-            currentTimingIndex = index; renderTodos();
+            if (currentTimingIndex !== null && currentTimingIndex !== index) {
+                alert(`溫馨防呆：您正專注在「${todos[currentTimingIndex].text}」，請先暫停或完成該項專注！`);
+                return;
+            }
+            currentTimingIndex = index;
+            renderTodos();
+
             timerInterval = setInterval(() => {
                 todos[index].secondsSpent = (todos[index].secondsSpent || 0) + 1;
                 const todayStr = getTodayString();
                 dailyHistory[todayStr] = (dailyHistory[todayStr] || 0) + 1;
+                
+                // 即時刷新上方面板總時間
                 totalTimeDisplay.textContent = formatTime(dailyHistory[todayStr]);
             }, 1000);
         };
 
-        window.pauseTask = function(index) { clearInterval(timerInterval); timerInterval = null; currentTimingIndex = null; saveToCloud(); };
-        window.stopTask = function(index) { clearInterval(timerInterval); timerInterval = null; currentTimingIndex = null; todos[index].completed = true; saveToCloud(); };
-        window.deleteTask = function(index) { todos.splice(index, 1); saveToCloud(); };
+        window.pauseTask = function(index) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+            currentTimingIndex = null;
+            saveToCloud();
+        };
 
-        // 新增事件
-        document.getElementById('add-btn').addEventListener('click', addTodoElement);
-        todoInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') addTodoElement(); });
+        window.stopTask = function(index) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+            currentTimingIndex = null;
+            todos[index].completed = true;
+            saveToCloud();
+        };
 
-        function addTodoElement() {
-            const text = todoInput.value.trim(); if (text === '') return;
+        window.deleteTask = function(index) {
+            if (confirm("確定要刪除此專注計畫嗎？相關進度與計時數據也將被抹除。")) {
+                todos.splice(index, 1);
+                saveToCloud();
+            }
+        };
+
+        document.getElementById('add-btn').addEventListener('click', addNewTodo);
+        todoInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') addNewTodo(); });
+
+        function addNewTodo() {
+            const text = todoInput.value.trim();
+            if (text === '') return;
             todos.push({ text: text, completed: false, secondsSpent: 0 });
-            todoInput.value = ''; saveToCloud();
+            todoInput.value = '';
+            saveToCloud();
         }
+
+        // 初始化安全性載入流程
+        initAuth();
     </script>
 </body>
 </html>
